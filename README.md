@@ -1,158 +1,323 @@
-# Property Monitor — Phase 1
+<div align="center">
 
-Core scraper + dedup + matching. Two sources are included:
+# 🏠 Property Monitor
 
-- **`sources/mock_source.py`** — fake but realistic listings, no network.
-- **`sources/html_source.py`** — a *generic, config-driven* scraper for
-  individual independent agent sites (the whole point of this project:
-  finding listings that don't surface on Zoopla/Rightmove).
+**A Python property listing monitor that finds new matching homes before you have to.**
 
-## Why not scrape the big portals?
+[![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![BeautifulSoup](https://img.shields.io/badge/BeautifulSoup-4B8BBE?style=for-the-badge)](https://www.crummy.com/software/BeautifulSoup/)
+[![Pytest](https://img.shields.io/badge/Pytest-0A9EDC?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org/)
+[![Phase 1](https://img.shields.io/badge/Phase%201-In%20Progress-ff69b4?style=for-the-badge)](#-roadmap)
 
-None of them currently offer a free, clearly permitted way to pull live
-listings for a personal project — Zoopla's old public listings API has
-been retired, and Rightmove/OnTheMarket restrict automated scraping in
-their terms. Individual agent sites are the more interesting target
-anyway (that's where the under-the-radar listings actually are), but
-they vary site to site — there's no blanket "yes" or "no". So:
+<br>
 
-## Before pointing this at any real site
+<a href="#-the-idea"><strong>✨ Explore the Project</strong></a>
+&nbsp;&nbsp;•&nbsp;&nbsp;
+<a href="#-how-it-works"><strong>🔎 How It Works</strong></a>
+&nbsp;&nbsp;•&nbsp;&nbsp;
+<a href="#-roadmap"><strong>🚀 Roadmap</strong></a>
 
-1. **Check robots.txt**, per-site, every time:
-   ```bash
-   python3 -m property_monitor.utils.robots https://the-agent-site.co.uk/listings
-   ```
-   This tells you if fetching is allowed and whether they've requested
-   a crawl-delay (respect it — `HTMLListingSource` already does, via
-   `polite_delay`).
-2. **Read the site's actual Terms of Use page yourself.** robots.txt
-   only governs automated crawlers; it isn't the same as full legal
-   permission, and some sites forbid scraping in their terms even with
-   a permissive robots.txt.
-3. Only then, write a `SiteConfig` for that site (see below) and go.
+</div>
 
-`HTMLListingSource` itself also refuses to fetch anything that fails
-the robots.txt check (raises `PermissionError`), so it can't be
-pointed at a disallowed URL by accident.
+---
 
-## Adding a real site
+## 💭 The Idea
 
-Each site is just a `SiteConfig` — CSS selectors for where things live
-on the listing page, no new scraper class needed:
+Property hunting is already enough of a headache without constantly checking the same websites hoping something new appears.
+
+**Property Monitor** is my attempt to automate that process.
+
+The idea is simple: give the system a few requirements — **location, budget, bedrooms and property type** — and let it check approved estate-agent listing pages, spot new properties and eventually notify you when something matches.
+
+For example:
+
+> 📍 Canterbury  •  💷 ≤ £300,000  •  🛏️ 2+ bedrooms  •  🏠 House
+>
+> **→ New matching property found.**
+
+The project started as a small Python scraper, but I'm building it out as a proper backend/full-stack system rather than stopping at scraping HTML.
+
+---
+
+## 🧠 The Challenge
+
+The interesting part isn't just getting text from a webpage.
+
+I wanted to build something that has to deal with **real engineering problems**:
+
+- 🔎 Different estate-agent websites have completely different HTML
+- 🆔 Listings need stable IDs so the same property isn't stored repeatedly
+- 🎯 Properties need to be matched against saved search criteria
+- 💾 Data eventually needs to persist between runs
+- ⏰ The system needs to check for new listings automatically
+- 🔔 New matches should trigger useful notifications rather than spam
+- 🧪 Each part needs to be testable independently
+- 🤝 Scraping needs to respect robots.txt, terms of use and crawl delays
+
+That makes the project less about "scraping a website" and more about **designing a reliable monitoring system**.
+
+---
+
+## 🔎 How It Works
+
+The current version follows this flow:
+
+```text
+🏠 Estate Agent Listings
+          ↓
+     🔎 HTML Scraper
+          ↓
+    🧹 Normalise Data
+          ↓
+      🆔 Deduplicate
+          ↓
+    🎯 Match Searches
+          ↓
+     🔔 Notify User
+```
+
+### 🧩 Config-Driven Scraping
+
+Instead of writing a completely different scraper class for every estate agent, the project uses a `SiteConfig` containing CSS selectors for the important parts of a listing.
+
+That means a new supported site can be configured without rewriting the entire scraping layer.
 
 ```python
-from property_monitor.sources import HTMLListingSource, SiteConfig
-
 config = SiteConfig(
     source_name="acme-agents",
     base_url="https://acme-agents.example.co.uk",
-    card_selector=".property-card",          # one per listing
+    card_selector=".property-card",
     title_selector=".property-card__title",
     price_selector=".property-card__price",
     location_selector=".property-card__location",
-    url_selector=".property-card__link",      # the <a> with the href
-    bedrooms_selector=None,                    # optional; parsed from title if omitted
-    id_attribute="data-listing-id",            # optional; falls back to the URL
+    url_selector=".property-card__link",
 )
-
-source = HTMLListingSource(config, listings_url="https://acme-agents.example.co.uk/for-sale")
 ```
 
-You'll work out the selectors by viewing the site's page source (or
-browser devtools) — every agent site's HTML is different, that's the
-whole reason this is config-driven rather than one-size-fits-all.
+The parser is also separated from the network-fetching code, which makes the HTML parsing logic easier to test using local fixtures.
 
-Swap this into `main.py` in place of (or alongside) `MockSource` —
-`run_check()` doesn't care which `PropertySource` it's given.
+---
 
-## Structure
+## 🛡️ Responsible Scraping
 
+I'm deliberately **not** treating scraping as "send as many requests as possible".
+
+Before connecting the monitor to a real site, the project is designed to:
+
+1. Check the site's `robots.txt`
+2. Respect any requested crawl delay
+3. Read the site's Terms of Use
+4. Only configure sources where automated access is appropriate
+5. Avoid hammering websites with unnecessary requests
+
+`HTMLListingSource` also checks `robots.txt` before fetching and applies a polite delay between requests.
+
+**The goal is reliable monitoring, not aggressive scraping.**
+
+---
+
+## 🗃️ Data Model
+
+Listings are represented as structured `Property` objects rather than leaving everything as raw HTML.
+
+Each property can contain:
+
+| Field | Purpose |
+| --- | --- |
+| `source_name` | Which estate-agent source it came from |
+| `source_id` | Stable ID for the listing |
+| `title` | Listing title |
+| `price` | Price in GBP |
+| `location` | Property location |
+| `bedrooms` | Bedroom count |
+| `property_type` | House, flat, bungalow, land or other |
+| `url` | Link to the original listing |
+| `first_seen` | When the monitor first encountered it |
+
+The listing ID is built from the source and source-specific ID, giving the system a straightforward way to detect duplicates.
+
+---
+
+## 🎯 Saved Searches
+
+The project also models user search criteria through `SavedSearch`.
+
+A search can define:
+
+```text
+📍 Location
+💷 Maximum price
+🛏️ Minimum bedrooms
+🏠 Property type
 ```
-property-monitor/            <- open THIS folder as the IntelliJ/PyCharm project root
-  pyproject.toml               project root marker + pytest config
-  requirements.txt
-  README.md
-  property_monitor/            the actual package
-    models.py                    Property, PropertyType, SavedSearch
-    store.py                      in-memory dedup store (-> Postgres in Phase 2)
-    utils/
-      robots.py                    robots.txt permission + crawl-delay checker
-    sources/
-      base.py                        PropertySource interface
-      mock_source.py                  fake listings for dev, no network
-      html_source.py                  generic config-driven agent-site scraper
-    tests/
-      fixtures/sample_agent_listings.html   local HTML fixture (not a real site)
-      test_html_source.py                    tests against the fixture, offline
-    test_core.py                 dedup + matching tests
-    main.py                      wires source -> dedup -> matching -> console alert
-```
 
-## Opening this in IntelliJ / PyCharm
+The matching logic then checks whether each property satisfies those requirements.
 
-1. Install the **Python plugin** if you're using plain IntelliJ (PyCharm has it built in).
-2. **File → Open** and select the `property-monitor/` folder (the one with `pyproject.toml`, not the inner `property_monitor/`).
-3. The IDE should auto-detect it as a Python project via `pyproject.toml`. If it doesn't prompt you, go to **Settings → Project → Python Interpreter** and add one (a new virtualenv is fine).
-4. Right-click `requirements.txt` → **Install all packages**, or use the IDE terminal: `pip install -r requirements.txt`.
-5. Right-click the `property_monitor` folder → **Run pytest in property_monitor** to run all 14 tests, or right-click `main.py` → **Run** for the mock-source demo.
+This is important because the end goal isn't just collecting properties — **it's finding the properties that actually matter to the user.**
 
-## Run it
+---
 
-```bash
-python3 -m property_monitor.main               # mock source demo
-python3 -m property_monitor.utils.robots <url>  # check a real site first
-```
+## 🧪 Testing
 
-## Test it
+The scraper is built around testable components rather than relying entirely on live websites.
+
+The project includes tests for:
+
+- HTML listing parsing
+- Price extraction
+- Bedroom extraction
+- Property-type detection
+- Listing IDs
+- Deduplication
+- Saved-search matching
+- Local HTML fixtures
+
+This means the core parsing behaviour can be tested offline without repeatedly requesting real websites.
+
+Run the test suite with:
 
 ```bash
 pip install -r requirements.txt
 pytest -v
 ```
 
-Note: this sandbox's own network is restricted to a small allowlist
-(PyPI, GitHub, etc.), so the robots checker and HTML scraper can't
-reach arbitrary sites from *here*. Run them locally, where you have
-normal internet access, once you've picked and cleared a real site.
+---
 
-## Where this is going
+## 🛠️ Stack
 
-This repo is Phase 1 of a 7-phase plan. The point of the finished
-product is the UX — a dashboard you'd actually check day-to-day for
-new listings that don't surface on the big portals — but a frontend
-only means something once there's a real backend to point it at, so
-it's sequenced last, not skipped:
+| Technology | Why I'm using it |
+| --- | --- |
+| 🐍 **Python** | Main language |
+| 🥣 **BeautifulSoup** | Parse listing HTML |
+| 🌐 **Requests** | HTTP requests |
+| 🧪 **Pytest** | Automated testing |
+| 🧱 **Dataclasses** | Structured property/search models |
+| 🗂️ **Sets** | Fast in-memory duplicate detection |
+| 🔐 **robots.txt** | Respect crawler permissions |
+
+### Planned Stack
+
+```text
+🐍 Python
+   ↓
+⚡ FastAPI
+   ↓
+🐘 PostgreSQL
+   ↓
+⚛️ React + TypeScript
+   ↓
+⏰ Scheduled monitoring
+   ↓
+📧 Email / 💬 Discord / 📱 Telegram
+```
+
+---
+
+## 🗺️ Roadmap
+
+This is being built in stages so I can actually understand each layer instead of throwing a huge stack together at once.
+
+### ✅ Phase 1 — Core Monitoring
+
+- [x] Generic HTML scraper
+- [x] Mock source for development
+- [x] Structured property models
+- [x] Deduplication
+- [x] Saved-search matching
+- [x] Console notifications
+- [x] robots.txt checking
+- [x] Automated tests
+
+### 🔄 Phase 2 — Persistence
+
+- [ ] PostgreSQL database
+- [ ] Persistent listings
+- [ ] Persistent saved searches
+- [ ] Better database-level deduplication
+
+### 📬 Phase 3–4 — Users & Notifications
+
+- [ ] Multiple saved searches per user
+- [ ] Real email notifications
+- [ ] Notification history
+- [ ] Prevent repeated alerts
+
+### ⚡ Phase 5 — API
+
+- [ ] FastAPI backend
+- [ ] `GET /listings`
+- [ ] `POST /saved-searches`
+- [ ] Search/filter endpoints
+- [ ] Input validation
+
+### 🎀 Phase 6 — Dashboard
+
+- [ ] React + TypeScript frontend
+- [ ] Saved-search dashboard
+- [ ] New-property feed
+- [ ] Property cards
+- [ ] Search management
+
+### ⏰ Phase 7 — Automation
+
+- [ ] Scheduled monitoring
+- [ ] Automatic source checks
+- [ ] Retry/error handling
+- [ ] Scraper health tracking
+- [ ] Deployment
+
+---
+
+## 🔄 The Bigger Picture
 
 ```mermaid
 flowchart LR
-    subgraph phase1["Phase 1 — done"]
-        direction TB
-        A["HTMLListingSource /<br/>mock_source"] --> B["ListingStore<br/>dedup, in-memory"]
-        B --> C["Matching<br/>SavedSearch criteria"]
-        C --> D["Console notify"]
-    end
-
-    subgraph phase2to4["Phase 2-4 — backend"]
-        direction TB
-        E["PostgreSQL-backed<br/>store"] --> F["Multiple saved<br/>searches, per user"]
-        F --> G["Real email<br/>notify"]
-    end
-
-    subgraph phase5to7["Phase 5-7 — product surface"]
-        direction TB
-        H["FastAPI<br/>endpoints"] --> I["React / TS<br/>dashboard"]
-        I --> J["Scheduler<br/>apscheduler / cron"]
-    end
-
-    phase1 --> phase2to4 --> phase5to7
+    A[🏠 Estate Agent Sites] --> B[🔎 Scrapers]
+    B --> C[🧹 Normalise]
+    C --> D[🐘 PostgreSQL]
+    D --> E[🎯 Match Searches]
+    E --> F[🔔 Notifications]
+    D --> G[⚡ FastAPI]
+    G --> H[⚛️ React Dashboard]
+    I[⏰ Scheduler] --> B
 ```
 
-- **Phase 2**: swap `ListingStore` for a real PostgreSQL-backed store — nothing persists between runs until this lands.
-- **Phase 3**: multiple saved searches, persisted per user.
-- **Phase 4**: replace the console `notify()` with real email sending.
-- **Phase 5**: wrap this in FastAPI endpoints — `GET /listings`, `POST /saved-searches` — the contract the frontend builds against.
-- **Phase 6**: React/TypeScript dashboard — saved searches, live listing feed, new-match alerts. Deliberately last: building it against Phase 1's in-memory store would mean rebuilding its data layer twice.
-- **Phase 7**: add a scheduler (e.g. `apscheduler` or a cron job) to
-  run `run_check()` on an interval per source, with the polite delays
-  and robots checks already baked in.
+The finished version should feel less like a script and more like a **small real-world product**: something that can continuously monitor sources, remember what it has already seen, understand what the user is looking for and surface useful matches.
 
+---
+
+## 💡 Why I'm Building It
+
+This project is helping me go beyond individual programming exercises and think about how different parts of software fit together.
+
+I'm getting hands-on practice with:
+
+- **Software architecture** — separating models, sources, storage and application logic
+- **Web scraping** — dealing with inconsistent real-world HTML
+- **Data modelling** — representing listings and user searches cleanly
+- **Algorithms & efficiency** — avoiding duplicate processing
+- **Backend development** — building towards a proper API and database
+- **Testing** — keeping core behaviour reliable as the project grows
+- **System design** — turning a small idea into a multi-stage application
+
+---
+
+## 🚀 Next Steps
+
+The next major milestone is **PostgreSQL**.
+
+Once listings and saved searches persist properly, I'll build the FastAPI layer around them, then move towards the React dashboard and automated monitoring.
+
+So for now:
+
+**Scrape → Match → Learn → Build → Repeat.** 💅
+
+---
+
+<div align="center">
+
+### 🏠 Property Monitor
+
+**Built in Python • Currently in Phase 1 • More to come ✨**
+
+</div>
