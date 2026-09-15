@@ -1,0 +1,28 @@
+[project]
+name = "property-monitor"
+version = "0.1.0"
+description = "Property listing monitor: scrape, dedupe, match against saved searches, notify."
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+    "beautifulsoup4>=4.12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+# Marking this a build target is what makes IntelliJ/PyCharm treat this
+# directory as the project root and property_monitor/ as a proper
+# first-party package for import resolution + autocomplete.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["property_monitor*"]
+
+[tool.pytest.ini_options]
+# Lets you run `pytest` from the project root and have it find both
+# test_core.py and tests/test_html_source.py without extra flags.
+testpaths = ["property_monitor"]
+pythonpath = ["."]

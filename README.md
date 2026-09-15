@@ -1,3 +1,5 @@
+# Property Monitor — Phase 1
+
 Core scraper + dedup + matching. Two sources are included:
 
 - **`sources/mock_source.py`** — fake but realistic listings, no network.
