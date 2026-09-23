@@ -6,7 +6,7 @@ or availability.
 from pathlib import Path
 
 from property_monitor import PropertyType
-from property_monitor import SiteConfig, parse_listing_page
+from property_monitor.html_source import SiteConfig, parse_listing_page
 
 FIXTURE = (Path(__file__).parent / "fixtures" / "sample_agent_listings.html").read_text()
 
