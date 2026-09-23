@@ -64,8 +64,23 @@ def main() -> None:
         print(f"--- check cycle {cycle} ---")
         run_check(source, store, searches, location="Canterbury")
 
-    print(f"\nTotal unique listings stored: {len(store)}")
 
+    print(f"\nTotal unique listings stored: {len(store)}")
+    print("\n" + "=" * 60)
+    print("📋 ALL STORED LISTINGS")
+    print("=" * 60)
+
+# List individual listings (temp)
+    for i, prop in enumerate(store, start=1):
+        print(f"\n[{i}]   {prop.title}")
+        print(f"    Price:            £{prop.price_gbp:,}")
+        print(f"   📍 Location:        {prop.location}")
+        print(f"    Rooms:             {prop.bedrooms} bedrooms")
+        print(f"    🏠  Property Type:  {prop.property_type.value}")
+        print(f"    🔗  URL:            {prop.url}")
+        print(f"    ID:                {prop.listing_id}")
+
+    print(f"\nTotal: {len(store)} unique listings")
 
 if __name__ == "__main__":
     main()
