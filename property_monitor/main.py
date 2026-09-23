@@ -13,9 +13,9 @@ changing.
 """
 from __future__ import annotations
 
-from property_monitor.utils.models import Property, PropertyType, SavedSearch
 from property_monitor.store import ListingStore
-from mock_source import MockSource
+from property_monitor.utils.models import Property, PropertyType, SavedSearch
+from .mock_source import MockSource #Relative Import
 
 def notify(prop: Property, matched_search: SavedSearch) -> None:
     """Stand-in for Phase 4's email notifications."""

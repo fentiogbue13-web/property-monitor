@@ -19,7 +19,7 @@ import random
 from typing import Iterable
 
 from property_monitor.utils.models import Property, PropertyType
-from base import PropertySource
+from .base import PropertySource
 
 _STREETS = [
     "Sturry Road", "Wincheap", "North Lane", "St Dunstans",
