@@ -13,10 +13,9 @@ changing.
 """
 from __future__ import annotations
 
-from property_monitor.models import Property, PropertyType, SavedSearch
-from property_monitor.sources import MockSource
 from property_monitor.store import ListingStore
-
+from property_monitor.utils.models import Property, PropertyType, SavedSearch
+from .mock_source import MockSource #Relative Import
 
 def notify(prop: Property, matched_search: SavedSearch) -> None:
     """Stand-in for Phase 4's email notifications."""
@@ -34,9 +33,9 @@ def run_check(source, store: ListingStore, searches: list[SavedSearch], location
     print(f"[{source.name}] fetched {len(listings)} listings for '{location}'")
 
     for prop in listings:
+
         if store.has_seen(prop):
             continue  # not new -> ignore
-
         store.remember(prop)  # save it
 
         for search in searches:
@@ -65,8 +64,23 @@ def main() -> None:
         print(f"--- check cycle {cycle} ---")
         run_check(source, store, searches, location="Canterbury")
 
-    print(f"\nTotal unique listings stored: {len(store)}")
 
+    print(f"\nTotal unique listings stored: {len(store)}")
+    print("\n" + "=" * 60)
+    print("📋 ALL STORED LISTINGS")
+    print("=" * 60)
+
+# List individual listings (temp)
+    for i, prop in enumerate(store, start=1):
+        print(f"\n[{i}]   {prop.title}")
+        print(f"    Price:            £{prop.price_gbp:,}")
+        print(f"   📍 Location:        {prop.location}")
+        print(f"    Rooms:             {prop.bedrooms} bedrooms")
+        print(f"    🏠  Property Type:  {prop.property_type.value}")
+        print(f"    🔗  URL:            {prop.url}")
+        print(f"    ID:                {prop.listing_id}")
+
+    print(f"\nTotal: {len(store)} unique listings")
 
 if __name__ == "__main__":
     main()
